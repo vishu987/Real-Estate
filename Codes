@@ -1,0 +1,366 @@
+Skip to content
+Search or jump to…
+Pull requests
+Issues
+Codespaces
+Marketplace
+Explore
+ 
+@vishu987 
+vishu987
+/
+Real-Estate
+Public
+Cannot fork because you own this repository and are not a member of any organizations.
+Code
+Issues
+Pull requests
+Actions
+Projects
+1
+Wiki
+Security
+Insights
+Settings
+Real-Estate/Vishwajeet_Soni_P1_Part2.R
+@vishu987
+vishu987 Add files via upload
+Latest commit ab605bb now
+ History
+ 1 contributor
+319 lines (232 sloc)  11.9 KB
+
+
+library(tidyverse)
+library(dplyr)
+library(tidymodels)
+library(visdat)
+library(car)
+library(parsnip)
+
+# project 1
+
+path1<- r"{D:\Data\Edvancer\Data_Project1\housing_train.csv}"
+housing_train<- read.csv(path1,sep = ",")
+head(housing_train)
+glimpse(housing_train)
+str(housing_train)
+dim(housing_train)
+vis_dat(housing_train)
+
+path2<- r"{D:\Data\Edvancer\Data_Project1\housing_test.csv}"
+housing_test<- read.csv(path2,sep = ",")
+head(housing_test)
+glimpse(housing_test)
+dim(housing_test)
+
+# checking the difference between train and test
+setdiff(names(housing_train),names(housing_test))
+
+# Part 1
+var(housing_train$Price)
+sum(is.na(housing_train$YearBuilt))
+mean(housing_train$Price)
+
+# What is the difference in average price between house type h and t?
+
+
+housing_train|>
+  rowwise()|>
+  group_by(Type)|>
+  summarise("mean"=mean(Price))
+
+sum(unique(housing_train$Postcode))
+head(housing_train)
+
+# Testing for normal distribution
+library(nortest)
+ad.test(housing_train$Distance)
+
+# Which seller has maximum value transactions? ( Sum of Price)
+# housing_train|>
+#   pivot_wider(names_from = SellerG, values_from = Price, values_fn = ~mean(.x, na.rm = TRUE))|>
+  #   data.frame()
+
+housing_train|>
+  rowwise()|>
+  group_by(SellerG)|>
+  summarise(sum(Price))|>
+  slice_max(`sum(Price)`)
+
+housing_train|>
+  rowwise()|>
+  group_by(CouncilArea)|>
+  summarise("avgP"=var(Price))|>
+  slice_max(avgP)
+
+
+# Part 2
+
+summary(housing_train$Price)
+summary(housing_train)
+glance(housing_train)
+
+# Chechking frequency by creating table on character
+
+for(i in 1:ncol(housing_train)){
+  if(class(housing_test[,i])=="character"){
+    print(paste("Summary (Table) for ",names(housing_train)[i]));
+    print(table(housing_train[,i]))
+  }
+}
+
+
+options(scipen = 999)
+
+hist(housing_train$Price)
+
+names(housing_train)
+glimpse(housing_train)
+
+# converting following columns as factor
+
+housing_train$Rooms<- as.factor(housing_train$Rooms) 
+housing_train$Bedroom2<- as.factor(housing_train$Bedroom2) 
+housing_train$Bathroom<- as.factor(housing_train$Bathroom)
+housing_train$Car<- as.factor(housing_train$Car)
+housing_train$YearBuilt<- as.factor(housing_train$YearBuilt)
+
+# giving  tagging to the columns
+
+
+
+dp_pipe = recipe(Price ~ ., data = housing_train) %>%
+  update_role(Postcode ,Address,Landsize, BuildingArea, new_role = "drop_vars") %>%
+  
+  update_role(SellerG,YearBuilt,CouncilArea,Rooms,Suburb,Type,Car,Bathroom,Bedroom2,
+              new_role = "to_dummies") %>%
+  step_rm(has_role("drop_vars")) %>%
+  
+  step_unknown(has_role("to_dummies"), new_level = "__missing__") %>%
+  step_other(has_role("to_dummies"),
+             threshold = 0.005,
+             other = "__other__") %>%
+  step_dummy(has_role("to_dummies")) %>%
+  step_novel(has_role('to_dummies')) %>% 
+  step_impute_median(all_numeric(), -all_outcomes())
+
+## this came last year in R
+
+dp_pipe=prep(dp_pipe)
+## fit step -> recipe+ prep
+
+## transforming the data + bake
+train=bake(dp_pipe,new_data = NULL)
+test=bake(dp_pipe,new_data=housing_test)
+
+head(train)
+head(test)
+# vis_dat(train)
+# vis_dat(housing_train)
+
+head(train)
+
+
+## this process of data prepartion ended here
+####
+
+set.seed(2)
+s=sample(1:nrow(train),0.8*nrow(train))
+
+t1=train[s,] ## train data -> where you build the model
+t2=train[-s,] ## test data -> from where you are going to validate the model
+
+t1$Price
+
+
+fit = lm(Price ~ . -Type_X__other__ -Bathroom_X__missing__ -Car_X__missing__, data = t1)
+
+alias(fit)
+
+sort(vif(fit),decreasing = T)
+
+# we'll take vif cutoff as 5
+
+
+fit=lm(Price ~. -Type_X__other__ -Bathroom_X__missing__ -Car_X__missing__ -Bedroom2_X__missing__ -YearBuilt_X__missing__ -Suburb_X__other__ -Bedroom2_X3-Distance -Rooms_X2 -CouncilArea_Moreland,data=t1)
+
+sort(vif(fit),decreasing = T)
+
+
+# p-value take the cutoff 0.1
+
+summary(fit)
+
+fit=stats::step(fit)
+
+## AIC score 
+
+summary(fit)
+
+
+formula(fit)
+
+fit=lm(Price ~ Method + Suburb_Airport.West + Suburb_Altona + Suburb_Altona.North + 
+         Suburb_Armadale + Suburb_Avondale.Heights + Suburb_Balwyn + 
+         Suburb_Balwyn.North + Suburb_Bentleigh.East + Suburb_Brighton + 
+         Suburb_Brighton.East + Suburb_Brunswick + Suburb_Brunswick.East + 
+         Suburb_Brunswick.West + Suburb_Bulleen + Suburb_Camberwell + 
+         Suburb_Coburg + Suburb_Coburg.North + Suburb_Doncaster + 
+         Suburb_Essendon + Suburb_Fawkner + Suburb_Glen.Iris + Suburb_Glenroy + 
+         Suburb_Hadfield + Suburb_Hampton + Suburb_Hawthorn.East + 
+         Suburb_Heidelberg.Heights + Suburb_Heidelberg.West + Suburb_Ivanhoe + 
+         Suburb_Keilor.East + Suburb_Kensington + Suburb_Kew + Suburb_Maidstone + 
+         Suburb_Malvern + Suburb_Malvern.East + Suburb_Maribyrnong + 
+         Suburb_Newport + Suburb_Niddrie + Suburb_Oakleigh.South + 
+         Suburb_Pascoe.Vale + Suburb_Prahran + Suburb_Preston + Suburb_Reservoir + 
+         Suburb_Rosanna + Suburb_South.Melbourne + Suburb_South.Yarra + 
+         Suburb_Strathmore + Suburb_Sunshine + Suburb_Sunshine.North + 
+         Suburb_Sunshine.West + Suburb_Templestowe.Lower + Suburb_Thornbury + 
+         Suburb_Toorak + Suburb_West.Footscray + Suburb_Williamstown + 
+         Rooms_X3 + Rooms_X4 + Rooms_X5 + Rooms_X__other__ + Type_t + 
+         Type_u + SellerG_Fletchers + SellerG_Greg + SellerG_Jellis + 
+         SellerG_Kay + SellerG_Marshall + SellerG_McGrath + SellerG_Miles + 
+         SellerG_RT + SellerG_Sweeney + SellerG_X__other__ + Bedroom2_X2 + 
+         Bedroom2_X5 + Bedroom2_X__other__ + Bathroom_X2 + Bathroom_X3 + 
+         Bathroom_X4 + Bathroom_X__other__ + Car_X1 + Car_X2 + Car_X3 + 
+         Car_X4 + Car_X__other__ + YearBuilt_X1900 + YearBuilt_X1910 + 
+         YearBuilt_X1920 + YearBuilt_X1925 + YearBuilt_X1935 + YearBuilt_X1950 + 
+         YearBuilt_X1955 + YearBuilt_X1960 + YearBuilt_X1965 + YearBuilt_X1970 + 
+         YearBuilt_X1975 + YearBuilt_X2005 + YearBuilt_X2008 + CouncilArea_Banyule + 
+         CouncilArea_Bayside + CouncilArea_Boroondara + CouncilArea_Brimbank + 
+         CouncilArea_Hobsons.Bay + CouncilArea_Kingston + CouncilArea_Maribyrnong + 
+         CouncilArea_Monash + CouncilArea_Moonee.Valley + CouncilArea_Port.Phillip + 
+         CouncilArea_Stonnington + CouncilArea_Yarra + CouncilArea_X__other__,
+       data=t1)
+
+summary(fit)
+
+###
+
+t2.pred=predict(fit,newdata=t2)
+
+errors=t2$Price-t2.pred
+errors_train = t1$Price - predict(fit, t1)
+## residual
+## test
+rmse=errors**2 %>% mean() %>% sqrt()
+mae=mean(abs(errors))
+## train
+rmse_train = errors_train**2 %>% mean() %>% sqrt()
+mae_train = mean(abs(errors_train))
+
+
+### model for predcition on the entire data
+
+fit.final=lm(Price ~ Method + Suburb_Airport.West + Suburb_Altona + Suburb_Altona.North + 
+               Suburb_Armadale + Suburb_Avondale.Heights + Suburb_Balwyn + 
+               Suburb_Balwyn.North + Suburb_Bentleigh.East + Suburb_Brighton + 
+               Suburb_Brighton.East + Suburb_Brunswick + Suburb_Brunswick.East + 
+               Suburb_Brunswick.West + Suburb_Bulleen + Suburb_Camberwell + 
+               Suburb_Coburg + Suburb_Coburg.North + Suburb_Doncaster + 
+               Suburb_Fawkner + Suburb_Glen.Iris + Suburb_Glenroy + 
+               Suburb_Hadfield + Suburb_Hampton + Suburb_Hawthorn.East + 
+               Suburb_Heidelberg.Heights + Suburb_Heidelberg.West + Suburb_Ivanhoe + 
+               Suburb_Keilor.East + Suburb_Kensington + Suburb_Kew + Suburb_Maidstone + 
+               Suburb_Malvern + Suburb_Malvern.East + Suburb_Maribyrnong  + Suburb_Niddrie + Suburb_Oakleigh.South + 
+               Suburb_Pascoe.Vale + Suburb_Prahran + Suburb_Preston + Suburb_Reservoir + 
+               Suburb_Rosanna +  Suburb_South.Yarra + 
+               Suburb_Strathmore + Suburb_Sunshine + Suburb_Sunshine.North + 
+               Suburb_Sunshine.West + Suburb_Templestowe.Lower + Suburb_Thornbury + 
+               Suburb_Toorak + Suburb_West.Footscray + Suburb_Williamstown + 
+               Rooms_X3 + Rooms_X4 + Rooms_X5 + Rooms_X__other__ + Type_t + 
+               Type_u  + SellerG_Greg + SellerG_Jellis + 
+               SellerG_Kay + SellerG_Marshall  + SellerG_Miles + 
+               SellerG_RT + SellerG_Sweeney + SellerG_X__other__ + Bedroom2_X2 + 
+               Bedroom2_X5 + Bedroom2_X__other__ + Bathroom_X2 + Bathroom_X3 + 
+               Bathroom_X4 + Bathroom_X__other__ + Car_X1 + Car_X2 + Car_X3 + 
+               Car_X4 + Car_X__other__ + YearBuilt_X1900 + YearBuilt_X1910  + YearBuilt_X1925  + YearBuilt_X1950 + 
+               YearBuilt_X1955 + YearBuilt_X1960 + YearBuilt_X1970 + YearBuilt_X2005  + CouncilArea_Banyule + 
+               CouncilArea_Bayside + CouncilArea_Boroondara + CouncilArea_Brimbank + 
+               CouncilArea_Hobsons.Bay + CouncilArea_Kingston + CouncilArea_Maribyrnong + 
+               CouncilArea_Monash + CouncilArea_Moonee.Valley + CouncilArea_Port.Phillip + 
+               CouncilArea_Stonnington + CouncilArea_X__other__,data=train)
+
+sort(vif(fit.final),decreasing = T)
+
+fit.final=stats::step(fit.final)
+
+summary(fit.final)
+
+
+formula(fit.final)
+
+fit.final=lm(Price ~ Method + Suburb_Airport.West + Suburb_Altona + Suburb_Altona.North + 
+               Suburb_Armadale + Suburb_Avondale.Heights + Suburb_Balwyn + 
+               Suburb_Balwyn.North + Suburb_Bentleigh.East + Suburb_Brighton + 
+               Suburb_Brighton.East + Suburb_Brunswick + Suburb_Brunswick.East + 
+               Suburb_Brunswick.West + Suburb_Bulleen + Suburb_Camberwell + 
+               Suburb_Coburg + Suburb_Coburg.North + Suburb_Doncaster + 
+               Suburb_Fawkner + Suburb_Glen.Iris + Suburb_Glenroy + Suburb_Hadfield + 
+               Suburb_Hampton + Suburb_Hawthorn.East + Suburb_Heidelberg.Heights + 
+               Suburb_Heidelberg.West + Suburb_Ivanhoe + Suburb_Keilor.East + 
+               Suburb_Kensington + Suburb_Kew + Suburb_Maidstone + Suburb_Malvern + 
+               Suburb_Malvern.East + Suburb_Maribyrnong + Suburb_Niddrie + 
+               Suburb_Oakleigh.South + Suburb_Pascoe.Vale + Suburb_Prahran + 
+               Suburb_Preston + Suburb_Reservoir + Suburb_Rosanna + Suburb_South.Yarra + 
+               Suburb_Strathmore + Suburb_Sunshine + Suburb_Sunshine.North + 
+               Suburb_Sunshine.West + Suburb_Templestowe.Lower + Suburb_Thornbury + 
+               Suburb_Toorak + Suburb_West.Footscray + Suburb_Williamstown + 
+               Rooms_X3 + Rooms_X4 + Rooms_X5 + Rooms_X__other__ + Type_t + 
+               Type_u + SellerG_Greg + SellerG_Jellis + SellerG_Kay + SellerG_Marshall + 
+               SellerG_Miles + SellerG_RT + SellerG_Sweeney + SellerG_X__other__ + 
+               Bedroom2_X2 + Bedroom2_X5 + Bedroom2_X__other__ + Bathroom_X2 + 
+               Bathroom_X3 + Bathroom_X4 + Bathroom_X__other__ + Car_X1 + 
+               Car_X2 + Car_X3 + Car_X4 + Car_X__other__ + YearBuilt_X1900 + 
+               YearBuilt_X1910 + YearBuilt_X1925 + YearBuilt_X1950 + YearBuilt_X1955 + 
+               YearBuilt_X1960 + YearBuilt_X1970 + YearBuilt_X2005 + CouncilArea_Banyule + 
+               CouncilArea_Bayside + CouncilArea_Boroondara + CouncilArea_Brimbank + 
+               CouncilArea_Hobsons.Bay + CouncilArea_Kingston + CouncilArea_Maribyrnong + 
+               CouncilArea_Monash + CouncilArea_Moonee.Valley + CouncilArea_Port.Phillip + 
+               CouncilArea_Stonnington + CouncilArea_X__other__,
+             data=train)
+
+summary(fit.final)
+
+nm <- names(fit.final$coefficients)
+
+nm <- nm[6:length(nm)]
+
+pairs(train[,c('Price', nm) ])
+
+## solving your projects, this file is to be required for submission
+
+test.pred=predict(fit.final,newdata=test)
+
+
+write.csv(test.pred,"Vishwajeet_Soni_P1_Part2.csv",row.names = F)
+
+### 
+
+plot(fit.final,1) # residual vs fitted values => non-linearity in the data exists or not
+
+plot(fit.final,2) # errors are normal or not
+
+plot(fit.final,3) # variance is constant or not
+
+plot(fit.final,4) # outliers in the data if cook's distance >1
+
+
+
+durbinWatsonTest(fit.final)
+Footer
+© 2023 GitHub, Inc.
+Footer navigation
+Terms
+Privacy
+Security
+Status
+Docs
+Contact GitHub
+Pricing
+API
+Training
+Blog
+About
+Real-Estate/Vishwajeet_Soni_P1_Part2.R at main · vishu987/Real-Estate
